@@ -1,4 +1,5 @@
-import pymsteams
+import msal
+from typing import Optional
 
 from mindsdb.integrations.handlers.ms_teams_handler.ms_teams_tables import MessagesTable
 from mindsdb.integrations.libs.api_handler import APIHandler
@@ -14,6 +15,11 @@ class MSTeamsHandler(APIHandler):
     """
     The Microsoft Teams handler implementation.
     """
+
+    MICROSOFT_GRAPH_BASE_API_URL: str = "https://graph.microsoft.com/"
+    MICROSOFT_GRAPH_API_VERSION: str = "v1.0"
+    MICROSOFT_GRAPH_API_SCOPES: list = ["https://graph.microsoft.com/.default"]
+    PAGINATION_COUNT: Optional[int] = 20
 
     name = 'teams'
 
@@ -47,11 +53,33 @@ class MSTeamsHandler(APIHandler):
         if self.is_connected is True:
             return self.connection
 
-        self.connection = pymsteams.connectorcard(self.connection_data['webhook_url'])
+        self.connection = msal.ConfidentialClientApplication(
+            client_id=self.connection_data.get('client_id'),
+            client_credential=self.connection_data.get('client_secret'),
+            authority=f"https://login.microsoftonline.com/" f"{self.connection_data['tenant_id']}",
+        )
 
         self.is_connected = True
 
         return self.connection
+    
+    def _get_access_token(self):
+        """
+        Get the API token.
+        Returns
+        -------
+        str
+            API token
+        """
+        token = self.connection.acquire_token_silent(
+            scopes=self.MICROSOFT_GRAPH_API_SCOPES,
+            account=None,
+        )
+
+        if not token:
+            token = self.connection.acquire_token_for_client(scopes=self.MICROSOFT_GRAPH_API_SCOPES)
+
+        return token
 
     def check_connection(self) -> StatusResponse:
         """
@@ -64,6 +92,7 @@ class MSTeamsHandler(APIHandler):
 
         try:
             self.connect()
+            self._get_access_token()
             response.success = True
         except Exception as e:
             log.logger.error(f'Error connecting to Microsoft Teams!')

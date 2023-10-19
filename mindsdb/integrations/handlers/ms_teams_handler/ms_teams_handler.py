@@ -1,4 +1,5 @@
 import msal
+import requests
 from typing import Optional
 
 from mindsdb.integrations.handlers.ms_teams_handler.ms_teams_tables import MessagesTable
@@ -19,7 +20,6 @@ class MSTeamsHandler(APIHandler):
     MICROSOFT_GRAPH_BASE_API_URL: str = "https://graph.microsoft.com/"
     MICROSOFT_GRAPH_API_VERSION: str = "v1.0"
     MICROSOFT_GRAPH_API_SCOPES: list = ["https://graph.microsoft.com/.default"]
-    PAGINATION_COUNT: Optional[int] = 20
 
     name = 'teams'
 
@@ -101,6 +101,25 @@ class MSTeamsHandler(APIHandler):
         self.is_connected = response.success
 
         return response
+    
+    def call_graph_api(self, api_endpoint: str, method: str = "GET", data: Optional[dict] = None) -> dict:
+        api_url = f"{self.MICROSOFT_GRAPH_BASE_API_URL}{self.MICROSOFT_GRAPH_API_VERSION}/{api_endpoint}/"
+        headers = {
+            "Authorization": f"Bearer {self._get_access_token()['access_token']}",
+            "Content-Type": "application/json",
+        }
+
+        if method == "GET":
+            response = requests.get(api_url, headers=headers)
+        elif method == "POST":
+            response = requests.post(api_url, headers=headers, json=data)
+        else:
+            raise ValueError(f"Unsupported method '{method}'.")
+        
+        if response.status_code == 200:
+            return response.json()
+        else:
+            raise requests.exceptions.RequestException(response.text)
 
     def native_query(self, query: str) -> StatusResponse:
         """Receive and process a raw query.
